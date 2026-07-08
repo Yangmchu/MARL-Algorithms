@@ -1,3 +1,5 @@
+"""MAVEN 的层级潜变量策略、条件动作网络和互信息变分分布。"""
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as f
@@ -5,12 +7,15 @@ import torch.nn.functional as f
 
 # output prob of z for an episode
 class HierarchicalPolicy(nn.Module):
+    """根据回合初始全局状态产生离散潜变量 z 的概率分布。"""
+
     def __init__(self, args):
         super(HierarchicalPolicy, self).__init__()
         self.fc_1 = nn.Linear(args.state_shape, 128)
         self.fc_2 = nn.Linear(128, args.noise_dim)
 
     def forward(self, state):
+        """输出当前状态下潜变量类别分布 p(z|s)。"""
         x = f.relu(self.fc_1(state))
         q = self.fc_2(x)
         prob = f.softmax(q, dim=-1)
@@ -18,6 +23,8 @@ class HierarchicalPolicy(nn.Module):
 
 
 class BootstrappedRNN(nn.Module):
+    """用潜变量 z 和智能体编号动态生成动作输出层参数。"""
+
     def __init__(self, input_shape, args):
         super(BootstrappedRNN, self).__init__()
         self.args = args
@@ -28,6 +35,7 @@ class BootstrappedRNN(nn.Module):
         self.hyper_b = nn.Linear(args.noise_dim + args.n_agents, args.n_actions)
 
     def forward(self, obs, hidden_state, z):
+        """计算以 z 为条件的个体动作 Q 值和新隐藏状态。"""
         agent_id = obs[:, -self.args.n_agents:]
         hyper_input = torch.cat([z, agent_id], dim=-1)
 
@@ -48,6 +56,8 @@ class BootstrappedRNN(nn.Module):
 
 # variational distribution for MI Loss， output q(z|sigma(tau))
 class VarDistribution(nn.Module):
+    """从整段联合轨迹近似后验 q(z|tau)，用于互信息下界。"""
+
     def __init__(self, args):
         super(VarDistribution, self).__init__()
         self.args = args
@@ -58,6 +68,7 @@ class VarDistribution(nn.Module):
         self.fc_2 = nn.Linear(32, args.noise_dim)
 
     def forward(self, inputs):  # q_value.
+        """编码时间序列并输出对潜变量 z 的后验概率。"""
         # get sigma(q) by softmax
         _, h = self.GRU(inputs)  # (1, 1, 64)
         x = f.relu(self.fc_1(h.squeeze(0)))

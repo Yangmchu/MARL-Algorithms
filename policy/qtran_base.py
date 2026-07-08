@@ -3,6 +3,7 @@ import torch.nn as nn
 import os
 from network.base_net import RNN
 from network.qtran_net import QtranV, QtranQBase
+from common.utils import get_checkpoint_path, get_load_dir, get_save_dir
 
 
 class QtranBase:
@@ -37,13 +38,13 @@ class QtranBase:
             self.target_joint_q.cuda()
             self.v.cuda()
 
-        self.model_dir = args.model_dir + '/' + args.alg + '/' + args.map
+        self.model_dir = get_load_dir(args.model_dir, args) if self.args.load_model else get_save_dir(args.model_dir, args)
         # 如果存在模型则加载模型
         if self.args.load_model:
-            if os.path.exists(self.model_dir + '/rnn_net_params.pkl'):
-                path_rnn = self.model_dir + '/rnn_net_params.pkl'
-                path_joint_q = self.model_dir + '/joint_q_params.pkl'
-                path_v = self.model_dir + '/v_params.pkl'
+            path_rnn = get_checkpoint_path(self.model_dir, 'rnn_net_params.pkl', args)
+            path_joint_q = get_checkpoint_path(self.model_dir, 'joint_q_params.pkl', args)
+            path_v = get_checkpoint_path(self.model_dir, 'v_params.pkl', args)
+            if os.path.exists(path_rnn) and os.path.exists(path_joint_q) and os.path.exists(path_v):
                 map_location = 'cuda:0' if self.args.cuda else 'cpu'
                 self.eval_rnn.load_state_dict(torch.load(path_rnn, map_location=map_location))
                 self.eval_joint_q.load_state_dict(torch.load(path_joint_q, map_location=map_location))
@@ -252,7 +253,7 @@ class QtranBase:
         self.target_hidden = torch.zeros((episode_num, self.n_agents, self.args.rnn_hidden_dim))
 
     def save_model(self, train_step):
-        num = str(train_step // self.args.save_cycle)
+        num = 'final' if train_step == 'final' else str(train_step // self.args.save_cycle)
         if not os.path.exists(self.model_dir):
             os.makedirs(self.model_dir)
 

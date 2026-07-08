@@ -4,6 +4,7 @@ import torch.nn.functional as f
 import os
 from network.maven_net import HierarchicalPolicy, BootstrappedRNN, VarDistribution
 from network.qmix_net import QMixNet
+from common.utils import get_checkpoint_path, get_load_dir, get_save_dir
 
 
 class MAVEN:
@@ -39,14 +40,14 @@ class MAVEN:
             self.eval_qmix_net.cuda()
             self.target_qmix_net.cuda()
             self.mi_net.cuda()
-        self.model_dir = args.model_dir + '/' + args.alg + '/' + args.map
+        self.model_dir = get_load_dir(args.model_dir, args) if self.args.load_model else get_save_dir(args.model_dir, args)
         # 如果存在模型则加载模型
         if self.args.load_model:
-            if os.path.exists(self.model_dir + '/rnn_net_params.pkl'):
-                path_z_policy = self.model_dir + '/z_policy_params.pkl'
-                path_rnn = self.model_dir + '/rnn_net_params.pkl'
-                path_qmix = self.model_dir + '/qmix_net_params.pkl'
-                path_mi = self.model_dir + '/mi_net_params.pkl'
+            path_z_policy = get_checkpoint_path(self.model_dir, 'z_policy_params.pkl', args)
+            path_rnn = get_checkpoint_path(self.model_dir, 'rnn_net_params.pkl', args)
+            path_qmix = get_checkpoint_path(self.model_dir, 'qmix_net_params.pkl', args)
+            path_mi = get_checkpoint_path(self.model_dir, 'mi_net_params.pkl', args)
+            if os.path.exists(path_z_policy) and os.path.exists(path_rnn) and os.path.exists(path_qmix) and os.path.exists(path_mi):
                 map_location = 'cuda:0' if self.args.cuda else 'cpu'
                 self.z_policy.load_state_dict(torch.load(path_z_policy, map_location=map_location))
                 self.eval_rnn.load_state_dict(torch.load(path_rnn, map_location=map_location))
@@ -229,7 +230,7 @@ class MAVEN:
         self.target_hidden = torch.zeros((episode_num, self.n_agents, self.args.rnn_hidden_dim))
 
     def save_model(self, train_step):
-        num = str(train_step // self.args.save_cycle)
+        num = 'final' if train_step == 'final' else str(train_step // self.args.save_cycle)
         if not os.path.exists(self.model_dir):
             os.makedirs(self.model_dir)
         torch.save(self.z_policy.state_dict(), self.model_dir + '/' + num + '_z_policy_params.pkl')

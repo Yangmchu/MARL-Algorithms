@@ -1,6 +1,81 @@
+"""通用辅助函数：构造器参数保存装饰器和 TD(lambda) 目标计算。"""
+
 import inspect
 import functools
+import os
 import torch
+
+
+def get_run_tag(args):
+    """根据关键实验参数生成保存目录标签，便于区分不同配置的结果。"""
+    tags = [
+        'last_action_{}'.format(int(args.last_action)),
+        'reuse_network_{}'.format(int(args.reuse_network))
+    ]
+    if hasattr(args, 'two_hyper_layers'):
+        tags.append('two_hyper_layers_{}'.format(int(args.two_hyper_layers)))
+    return '-'.join(tags)
+
+
+def get_run_name(args):
+    """返回当前独立实验的目录名，例如 run_0。"""
+    run_num = getattr(args, 'save_run', None)
+    if run_num is None:
+        run_num = getattr(args, 'run_num', 0)
+    return 'run_{}'.format(run_num)
+
+
+def get_save_dir(root_dir, args):
+    """生成带参数标签和独立实验编号的保存目录。"""
+    return root_dir + '/' + args.alg + '/' + args.map + '/' + get_run_tag(args) + '/' + get_run_name(args)
+
+
+def get_load_dir(root_dir, args):
+    """返回模型加载目录；未指定 load_run 时自动选择最新的 run_x。"""
+    base_dir = root_dir + '/' + args.alg + '/' + args.map + '/' + get_run_tag(args)
+    load_run = getattr(args, 'load_run', None)
+    if load_run is not None:
+        return base_dir + '/run_{}'.format(load_run)
+    if not os.path.exists(base_dir):
+        return base_dir
+    run_dirs = []
+    for name in os.listdir(base_dir):
+        path = base_dir + '/' + name
+        if os.path.isdir(path) and name.startswith('run_'):
+            try:
+                run_dirs.append((int(name.split('_')[-1]), path))
+            except ValueError:
+                pass
+    if len(run_dirs) == 0:
+        return base_dir
+    return sorted(run_dirs, key=lambda x: x[0])[-1][1]
+
+
+def get_checkpoint_path(model_dir, suffix, args):
+    """返回 checkpoint 路径；未指定 load_checkpoint 时自动选择最新编号。"""
+    load_checkpoint = getattr(args, 'load_checkpoint', None)
+    if load_checkpoint is not None:
+        return model_dir + '/' + str(load_checkpoint) + '_' + suffix
+    numbered_paths = []
+    if os.path.exists(model_dir):
+        for name in os.listdir(model_dir):
+            if name.endswith('_' + suffix):
+                try:
+                    numbered_paths.append((int(name.split('_')[0]), model_dir + '/' + name))
+                except ValueError:
+                    pass
+    if len(numbered_paths) > 0:
+        return sorted(numbered_paths, key=lambda x: x[0])[-1][1]
+    return model_dir + '/' + suffix
+
+
+def format_elapsed_time(seconds):
+    """将秒数格式化为 HH:MM:SS。"""
+    seconds = int(seconds)
+    hours = seconds // 3600
+    minutes = (seconds % 3600) // 60
+    seconds = seconds % 60
+    return '{:02d}:{:02d}:{:02d}'.format(hours, minutes, seconds)
 
 
 def store_args(method):
@@ -17,6 +92,7 @@ def store_args(method):
 
     @functools.wraps(method)
     def wrapper(*positional_args, **keyword_args):
+        """合并默认值和调用参数，将其写入实例后再执行原方法。"""
         self = positional_args[0]
         # Get default arg values
         args = defaults.copy()
@@ -31,6 +107,7 @@ def store_args(method):
 
 
 def td_lambda_target(batch, max_episode_len, q_targets, args):
+    """由奖励、终止标记和目标 Q 值计算每个智能体的 TD(lambda) 回报。"""
     # batch.shep = (episode_num, max_episode_len， n_agents，n_actions)
     # q_targets.shape = (episode_num, max_episode_len， n_agents)
     episode_num = batch['o'].shape[0]
@@ -46,6 +123,7 @@ def td_lambda_target(batch, max_episode_len, q_targets, args):
     如果没有置0，在计算td-error后再置0是来不及的
     3. terminated用来将超出当前episode长度的q_targets和r置为0
     '''
+    # 最后一维枚举不同跨度的 n-step return，之后再按 lambda 加权融合。
     n_step_return = torch.zeros((episode_num, max_episode_len, args.n_agents, max_episode_len))
     for transition_idx in range(max_episode_len - 1, -1, -1):
         # 最后计算1 step return

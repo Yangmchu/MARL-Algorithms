@@ -1,3 +1,5 @@
+"""COMA 集中式 Critic，为指定智能体的每个候选动作估计联合 Q 值。"""
+
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -8,6 +10,8 @@ import torch.nn.functional as F
 
 
 class ComaCritic(nn.Module):
+    """三层 MLP Critic，输出维度为动作数量。"""
+
     def __init__(self, input_shape, args):
         super(ComaCritic, self).__init__()
         self.args = args
@@ -16,6 +20,7 @@ class ComaCritic(nn.Module):
         self.fc3 = nn.Linear(args.critic_dim, self.args.n_actions)
 
     def forward(self, inputs):
+        """批量计算反事实基线所需的各动作 Q 值。"""
         x = F.relu(self.fc1(inputs))
         x = F.relu(self.fc2(x))
         q = self.fc3(x)

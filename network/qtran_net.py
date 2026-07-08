@@ -1,3 +1,5 @@
+"""QTRAN 的联合动作价值网络与状态价值网络。"""
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -5,6 +7,8 @@ import torch.nn.functional as F
 
 # counterfactual joint networks, 输入state、所有agent的hidden_state、其他agent的动作、自己的编号，输出自己所有动作对应的联合Q值
 class QtranQAlt(nn.Module):
+    """反事实联合 Q 网络：逐个智能体评估所有候选动作。"""
+
     def __init__(self, args):
         super(QtranQAlt, self).__init__()
         self.args = args
@@ -29,6 +33,7 @@ class QtranQAlt(nn.Module):
 
     # 因为所有时刻所有agent的hidden_states在之前已经计算好了，所以联合Q值可以一次计算所有transition的，不需要一条一条计算。
     def forward(self, state, hidden_states, actions):  # (episode_num, max_episode_len, n_agents, n_actions)
+        """固定其他智能体动作，批量输出当前智能体各动作的联合 Q。"""
         # state的shape为(episode_num, max_episode_len, n_agents, state_shape+n_agents)，包括了当前agent的编号
         episode_num, max_episode_len, n_agents, n_actions = actions.shape
 
@@ -65,6 +70,8 @@ class QtranQAlt(nn.Module):
 
 # Joint action-value network， 输入state,所有agent的hidden_state，所有agent的动作，输出对应的联合Q值
 class QtranQBase(nn.Module):
+    """基础联合 Q 网络：对所有智能体的隐藏状态和动作编码后求和。"""
+
     def __init__(self, args):
         super(QtranQBase, self).__init__()
         self.args = args
@@ -84,6 +91,7 @@ class QtranQBase(nn.Module):
 
     # 因为所有时刻所有agent的hidden_states在之前已经计算好了，所以联合Q值可以一次计算所有transition的，不需要一条一条计算。
     def forward(self, state, hidden_states, actions):  # (episode_num, max_episode_len, n_agents, n_actions)
+        """评估给定全局状态与联合动作的标量 Q_joint。"""
         episode_num, max_episode_len, n_agents, _ = actions.shape
         hidden_actions = torch.cat([hidden_states, actions], dim=-1)
         hidden_actions = hidden_actions.reshape(-1, self.args.rnn_hidden_dim + self.args.n_actions)
@@ -98,6 +106,8 @@ class QtranQBase(nn.Module):
 
 # 输入当前的state与所有agent的hidden_state, 输出V值
 class QtranV(nn.Module):
+    """QTRAN 约束中的状态价值网络 V(s, tau)。"""
+
     def __init__(self, args):
         super(QtranV, self).__init__()
         self.args = args
@@ -117,6 +127,7 @@ class QtranV(nn.Module):
                                nn.Linear(self.args.qtran_hidden_dim, 1))
 
     def forward(self, state, hidden):
+        """聚合各智能体隐藏状态并计算联合状态价值。"""
         episode_num, max_episode_len, n_agents, _ = hidden.shape
         state = state.reshape(episode_num * max_episode_len, -1)
         hidden_encoding = self.hidden_encoding(hidden.reshape(-1, self.args.rnn_hidden_dim))

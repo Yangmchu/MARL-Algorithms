@@ -1,3 +1,5 @@
+"""与 SMAC 环境交互并生成定长 episode 批次。"""
+
 import numpy as np
 import torch
 from torch.distributions import one_hot_categorical
@@ -5,6 +7,8 @@ import time
 
 
 class RolloutWorker:
+    """为无显式通信的算法逐个智能体选动作并收集轨迹。"""
+
     def __init__(self, env, agents, args):
         self.env = env
         self.agents = agents
@@ -22,6 +26,7 @@ class RolloutWorker:
 
     @torch.no_grad()
     def generate_episode(self, episode_num=None, evaluate=False):
+        """采集一个 episode，返回定长轨迹、累计奖励、胜负标志和步数。"""
         if self.args.replay_dir != '' and evaluate and episode_num == 0:  # prepare for save replay of evaluation
             self.env.close()
         o, u, r, s, avail_u, u_onehot, terminate, padded = [], [], [], [], [], [], [], []
@@ -115,6 +120,7 @@ class RolloutWorker:
             padded.append([1.])
             terminate.append([1.])
 
+        # 字段约定：o/s 为当前输入，o_next/s_next 为下一时刻输入，u 为动作索引。
         episode = dict(o=o.copy(),
                        s=s.copy(),
                        u=u.copy(),
@@ -142,6 +148,8 @@ class RolloutWorker:
 
 # RolloutWorker for communication
 class CommRolloutWorker:
+    """为 CommNet/G2ANet 一次计算全部智能体动作分数并收集轨迹。"""
+
     def __init__(self, env, agents, args):
         self.env = env
         self.agents = agents
@@ -159,6 +167,7 @@ class CommRolloutWorker:
 
     @torch.no_grad()
     def generate_episode(self, episode_num=None, evaluate=False):
+        """采集一个通信算法 episode，并补齐到环境时间上限。"""
         if self.args.replay_dir != '' and evaluate and episode_num == 0:  # prepare for save replay
             self.env.close()
         o, u, r, s, avail_u, u_onehot, terminate, padded = [], [], [], [], [], [], [], []

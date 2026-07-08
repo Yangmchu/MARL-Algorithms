@@ -1,9 +1,12 @@
+"""项目入口：解析参数、创建 SMAC 环境并启动多次训练或评估。"""
+
 from runner import Runner
 from smac.env import StarCraft2Env
-from common.arguments import get_common_args, get_coma_args, get_mixer_args, get_centralv_args, get_reinforce_args, get_commnet_args, get_g2anet_args
+from common.arguments import get_common_args, get_env_args, get_coma_args, get_mixer_args, get_centralv_args, get_reinforce_args, get_commnet_args, get_g2anet_args
 
 
 if __name__ == '__main__':
+    # 使用不同的 num 保存 8 次独立运行的曲线，便于之后统计均值。
     for i in range(8):
         args = get_common_args()
         if args.alg.find('coma') > -1:
@@ -18,11 +21,9 @@ if __name__ == '__main__':
             args = get_commnet_args(args)
         if args.alg.find('g2anet') > -1:
             args = get_g2anet_args(args)
-        env = StarCraft2Env(map_name=args.map,
-                            step_mul=args.step_mul,
-                            difficulty=args.difficulty,
-                            game_version=args.game_version,
-                            replay_dir=args.replay_dir)
+        args.run_num = i
+        env = StarCraft2Env(**get_env_args(args))
+        # 环境相关维度必须在创建算法网络之前写回 args。
         env_info = env.get_env_info()
         args.n_actions = env_info["n_actions"]
         args.n_agents = env_info["n_agents"]

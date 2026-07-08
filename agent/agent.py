@@ -1,10 +1,16 @@
+"""智能体接口：选择具体策略、维护循环状态并完成动作选择与训练。"""
+
 import numpy as np
 import torch
+import time
+from common.utils import format_elapsed_time
 from torch.distributions import Categorical
 
 
 # Agent no communication
 class Agents:
+    """非通信算法的统一外观，对上层隐藏不同策略类的实现差异。"""
+
     def __init__(self, args):
         self.n_actions = args.n_actions
         self.n_agents = args.n_agents
@@ -42,6 +48,7 @@ class Agents:
         self.args = args
 
     def choose_action(self, obs, last_action, agent_num, avail_actions, epsilon, maven_z=None):
+        """根据局部观测和可用动作，为单个智能体选择下一动作。"""
         inputs = obs.copy()
         avail_actions_ind = np.nonzero(avail_actions)[0]  # index of actions which can be choose
 
@@ -84,7 +91,9 @@ class Agents:
 
     def _choose_action_from_softmax(self, inputs, avail_actions, epsilon):
         """
-        :param inputs: # q_value of all actions
+        将 Actor 输出混合 epsilon 均匀噪声后，按概率采样可执行动作。
+
+        :param inputs: 所有动作的未归一化分数（logits）。
         """
         action_num = avail_actions.sum(dim=1, keepdim=True).float().repeat(1, avail_actions.shape[-1])  # num of avail_actions
         # 先将Actor网络的输出通过softmax转换成概率分布
@@ -102,6 +111,7 @@ class Agents:
         return action
 
     def _get_max_episode_len(self, batch):
+        """找出批次中的最长有效轨迹，以裁掉统一填充的尾部。"""
         terminated = batch['terminated']
         episode_num = terminated.shape[0]
         max_episode_len = 0
@@ -116,7 +126,7 @@ class Agents:
         return max_episode_len
 
     def train(self, batch, train_step, epsilon=None):  # coma needs epsilon for training
-
+        """裁剪无效时间步，调用策略学习，并按周期保存模型。"""
         # different episode has different length, so we need to get max length of the batch
         max_episode_len = self._get_max_episode_len(batch)
         for key in batch.keys():
@@ -124,11 +134,15 @@ class Agents:
                 batch[key] = batch[key][:, :max_episode_len]
         self.policy.learn(batch, max_episode_len, train_step, epsilon)
         if train_step > 0 and train_step % self.args.save_cycle == 0:
+            elapsed_time = time.time() - getattr(self.args, 'training_start_time', time.time())
+            print('Save model at train_step {}, elapsed time {}'.format(train_step, format_elapsed_time(elapsed_time)))
             self.policy.save_model(train_step)
 
 
 # Agent for communication
 class CommAgents:
+    """通信算法接口：一次前向计算联合生成所有智能体的动作分数。"""
+
     def __init__(self, args):
         self.n_actions = args.n_actions
         self.n_agents = args.n_agents
@@ -151,6 +165,7 @@ class CommAgents:
 
     # 根据weights得到概率，然后再根据epsilon选动作
     def choose_action(self, weights, avail_actions, epsilon):
+        """从通信网络给出的动作分数中按 epsilon-softmax 策略采样。"""
         weights = weights.unsqueeze(0)
         avail_actions = torch.tensor(avail_actions, dtype=torch.float32).unsqueeze(0)
         action_num = avail_actions.sum(dim=1, keepdim=True).float().repeat(1, avail_actions.shape[-1])  # 可以选择的动作的个数
@@ -169,6 +184,7 @@ class CommAgents:
         return action
 
     def get_action_weights(self, obs, last_action):
+        """拼接所有智能体输入，通过通信网络得到联合动作分数。"""
         obs = torch.tensor(obs, dtype=torch.float32)
         last_action = torch.tensor(last_action, dtype=torch.float32)
         inputs = list()
@@ -187,6 +203,7 @@ class CommAgents:
         return weights.cpu()
 
     def _get_max_episode_len(self, batch):
+        """返回批次中最长的有效 episode 长度。"""
         terminated = batch['terminated']
         episode_num = terminated.shape[0]
         max_episode_len = 0
@@ -201,12 +218,15 @@ class CommAgents:
         return max_episode_len
 
     def train(self, batch, train_step, epsilon=None):  # coma在训练时也需要epsilon计算动作的执行概率
+        """移除填充尾部并委托底层策略更新参数。"""
         # 每次学习时，各个episode的长度不一样，因此取其中最长的episode作为所有episode的长度
         max_episode_len = self._get_max_episode_len(batch)
         for key in batch.keys():
             batch[key] = batch[key][:, :max_episode_len]
         self.policy.learn(batch, max_episode_len, train_step, epsilon)
         if train_step > 0 and train_step % self.args.save_cycle == 0:
+            elapsed_time = time.time() - getattr(self.args, 'training_start_time', time.time())
+            print('Save model at train_step {}, elapsed time {}'.format(train_step, format_elapsed_time(elapsed_time)))
             self.policy.save_model(train_step)
 
 

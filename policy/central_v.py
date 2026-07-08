@@ -3,6 +3,7 @@ import os
 from network.base_net import RNN, Critic
 from network.commnet import CommNet
 from network.g2anet import G2ANet
+from common.utils import get_checkpoint_path, get_load_dir, get_save_dir
 
 
 class CentralV:
@@ -42,12 +43,12 @@ class CentralV:
             self.eval_critic.cuda()
             self.target_critic.cuda()
 
-        self.model_dir = args.model_dir + '/' + args.alg + '/' + args.map
+        self.model_dir = get_load_dir(args.model_dir, args) if self.args.load_model else get_save_dir(args.model_dir, args)
         # 如果存在模型则加载模型
         if self.args.load_model:
-            if os.path.exists(self.model_dir + '/rnn_params.pkl'):
-                path_rnn = self.model_dir + '/rnn_params.pkl'
-                path_critic = self.model_dir + '/critic_params.pkl'
+            path_rnn = get_checkpoint_path(self.model_dir, 'rnn_params.pkl', args)
+            path_critic = get_checkpoint_path(self.model_dir, 'critic_params.pkl', args)
+            if os.path.exists(path_rnn) and os.path.exists(path_critic):
                 map_location = 'cuda:0' if self.args.cuda else 'cpu'
                 self.eval_rnn.load_state_dict(torch.load(path_rnn, map_location=map_location))
                 self.eval_critic.load_state_dict(torch.load(path_critic, map_location=map_location))
@@ -204,7 +205,7 @@ class CentralV:
         return td_error
 
     def save_model(self, train_step):
-        num = str(train_step // self.args.save_cycle)
+        num = 'final' if train_step == 'final' else str(train_step // self.args.save_cycle)
         if not os.path.exists(self.model_dir):
             os.makedirs(self.model_dir)
         torch.save(self.eval_critic.state_dict(), self.model_dir + '/' + num + '_critic_params.pkl')

@@ -1,3 +1,5 @@
+"""G2ANet：以硬注意力筛选通信对象，再用软注意力聚合其信息。"""
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as f
@@ -6,6 +8,8 @@ import numpy as np
 
 # 输入所有agent的obs，输出所有agent的动作概率分布
 class G2ANet(nn.Module):
+    """为每个智能体学习稀疏的、带权重的通信图。"""
+
     def __init__(self, input_shape, args):
         super(G2ANet, self).__init__()
 
@@ -32,6 +36,7 @@ class G2ANet(nn.Module):
         self.input_shape = input_shape
 
     def forward(self, obs, hidden_state):
+        """返回所有智能体的动作 logits 和更新后的本地循环状态。"""
         size = obs.shape[0]  # batch_size * n_agents
         # 先对obs编码
         obs_encoding = f.relu(self.encoding(obs))
@@ -40,7 +45,8 @@ class G2ANet(nn.Module):
         # 经过自己的GRU得到h
         h_out = self.h(obs_encoding, h_in)  # (batch_size * n_agents, args.rnn_hidden_dim)
 
-        # Hard Attention，GRU和GRUCell不同，输入的维度是(序列长度,batch_size, dim)
+        # Hard Attention 决定“是否听取某个智能体”，形成近似离散通信边。
+        # GRU 和 GRUCell 不同，输入维度是 (序列长度, batch_size, dim)。
         if self.args.hard:
             # Hard Attention前的准备
             h = h_out.reshape(-1, self.args.n_agents, self.args.rnn_hidden_dim)  # 把h转化出n_agents维度，(batch_size, n_agents, rnn_hidden_dim)
@@ -78,7 +84,7 @@ class G2ANet(nn.Module):
             if self.args.cuda:
                 hard_weights = hard_weights.cuda()
 
-        # Soft Attention
+        # Soft Attention 决定已保留通信边之间的相对重要程度。
         q = self.q(h_out).reshape(-1, self.args.n_agents, self.args.attention_dim)  # (batch_size, n_agents, args.attention_dim)
         k = self.k(h_out).reshape(-1, self.args.n_agents, self.args.attention_dim)  # (batch_size, n_agents, args.attention_dim)
         v = f.relu(self.v(h_out)).reshape(-1, self.args.n_agents, self.args.attention_dim)  # (batch_size, n_agents, args.attention_dim)

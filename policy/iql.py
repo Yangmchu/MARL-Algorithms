@@ -1,6 +1,7 @@
 import torch
 import os
 from network.base_net import RNN
+from common.utils import get_checkpoint_path, get_load_dir, get_save_dir
 
 
 class IQL:
@@ -23,11 +24,11 @@ class IQL:
         if self.args.cuda:
             self.eval_rnn.cuda()
             self.target_rnn.cuda()
-        self.model_dir = args.model_dir + '/' + args.alg + '/' + args.map
+        self.model_dir = get_load_dir(args.model_dir, args) if self.args.load_model else get_save_dir(args.model_dir, args)
         # 如果存在模型则加载模型
         if self.args.load_model:
-            if os.path.exists(self.model_dir + '/rnn_net_params.pkl'):
-                path_rnn = self.model_dir + '/rnn_net_params.pkl'
+            path_rnn = get_checkpoint_path(self.model_dir, 'rnn_net_params.pkl', args)
+            if os.path.exists(path_rnn):
                 map_location = 'cuda:0' if self.args.cuda else 'cpu'
                 self.eval_rnn.load_state_dict(torch.load(path_rnn, map_location=map_location))
                 print('Successfully load the model: {}'.format(path_rnn))
@@ -154,7 +155,7 @@ class IQL:
         self.target_hidden = torch.zeros((episode_num, self.n_agents, self.args.rnn_hidden_dim))
 
     def save_model(self, train_step):
-        num = str(train_step // self.args.save_cycle)
+        num = 'final' if train_step == 'final' else str(train_step // self.args.save_cycle)
         if not os.path.exists(self.model_dir):
             os.makedirs(self.model_dir)
         torch.save(self.eval_rnn.state_dict(),  self.model_dir + '/' + num + '_rnn_net_params.pkl')

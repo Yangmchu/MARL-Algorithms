@@ -1,8 +1,11 @@
+"""离线汇总多次实验的胜率数据，并绘制不同算法的对比曲线。"""
+
 import numpy as np
 import matplotlib.pyplot as plt
 
 
 def plt_win_rate_mean():
+    """读取每种算法的 8 次运行结果，求均值后生成总览图。"""
     path = []
     alg_num = 8
     win_rates = [[] for _ in range(alg_num)]

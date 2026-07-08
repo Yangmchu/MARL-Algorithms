@@ -1,3 +1,5 @@
+"""CommNet：通过多轮平均消息传递实现智能体间显式通信。"""
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as f
@@ -5,6 +7,8 @@ import torch.nn.functional as f
 
 # input obs of all agents，output probability distribution of all agents
 class CommNet(nn.Module):
+    """融合其他智能体隐藏状态，输出每个智能体的动作 logits。"""
+
     def __init__(self, input_shape, args):
         super(CommNet, self).__init__()
         self.encoding = nn.Linear(input_shape, args.rnn_hidden_dim)  # 对所有agent的obs解码
@@ -15,6 +19,7 @@ class CommNet(nn.Module):
         self.input_shape = input_shape
 
     def forward(self, obs, hidden_state):
+        """编码观测、执行 k 轮通信并返回动作分数和观测循环状态。"""
         # 先对obs编码
         obs_encoding = torch.sigmoid(self.encoding(obs))  # .reshape(-1, self.args.n_agents, self.args.rnn_hidden_dim)
 

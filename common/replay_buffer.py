@@ -1,8 +1,12 @@
+"""按完整 episode 存储与采样经验的线程安全循环回放缓冲区。"""
+
 import numpy as np
 import threading
 
 
 class ReplayBuffer:
+    """预分配固定容量数组，以 episode 为单位覆盖写入历史轨迹。"""
+
     def __init__(self, args):
         self.args = args
         self.n_actions = self.args.n_actions
@@ -15,6 +19,7 @@ class ReplayBuffer:
         self.current_idx = 0
         self.current_size = 0
         # create the buffer to store info
+        # 每个字段前两维统一为 [episode, time]，方便批量采样和训练。
         self.buffers = {'o': np.empty([self.size, self.episode_limit, self.n_agents, self.obs_shape]),
                         'u': np.empty([self.size, self.episode_limit, self.n_agents, 1]),
                         's': np.empty([self.size, self.episode_limit, self.state_shape]),
@@ -34,6 +39,7 @@ class ReplayBuffer:
 
         # store the episode
     def store_episode(self, episode_batch):
+        """原子地为一批 episode 分配槽位并写入所有轨迹字段。"""
         batch_size = episode_batch['o'].shape[0]  # episode_number
         with self.lock:
             idxs = self._get_storage_idx(inc=batch_size)
@@ -53,6 +59,7 @@ class ReplayBuffer:
                 self.buffers['z'][idxs] = episode_batch['z']
 
     def sample(self, batch_size):
+        """有放回地均匀采样指定数量的 episode。"""
         temp_buffer = {}
         idx = np.random.randint(0, self.current_size, batch_size)
         for key in self.buffers.keys():
@@ -60,6 +67,12 @@ class ReplayBuffer:
         return temp_buffer
 
     def _get_storage_idx(self, inc=None):
+        if inc > self.size:
+            raise ValueError(
+                f"inc ({inc}) cannot be larger than replay buffer size ({self.size})"
+            )
+
+        """返回接下来可写的循环索引，并推进写指针与有效容量。"""
         inc = inc or 1
         if self.current_idx + inc <= self.size:
             idx = np.arange(self.current_idx, self.current_idx + inc)

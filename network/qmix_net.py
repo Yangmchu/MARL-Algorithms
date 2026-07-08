@@ -1,9 +1,13 @@
+"""QMIX 混合网络：由全局状态生成权重，将个体 Q 值单调混合。"""
+
 import torch.nn as nn
 import torch
 import torch.nn.functional as F
 
 
 class QMixNet(nn.Module):
+    """通过超网络生成混合参数，保证联合 Q 对各个体 Q 单调。"""
+
     def __init__(self, args):
         super(QMixNet, self).__init__()
         self.args = args
@@ -34,11 +38,13 @@ class QMixNet(nn.Module):
                                      )
 
     def forward(self, q_values, states):  # states的shape为(episode_num, max_episode_len， state_shape)
+        """将形状 [episode, time, agent] 的个体 Q 合成为联合 Q_tot。"""
         # 传入的q_values是三维的，shape为(episode_num, max_episode_len， n_agents)
         episode_num = q_values.size(0)
         q_values = q_values.view(-1, 1, self.args.n_agents)  # (episode_num * max_episode_len, 1, n_agents) = (1920,1,5)
         states = states.reshape(-1, self.args.state_shape)  # (episode_num * max_episode_len, state_shape)
 
+        # 权重取绝对值以满足 dQ_tot/dQ_agent >= 0 的单调性约束。
         w1 = torch.abs(self.hyper_w1(states))  # (1920, 160)
         b1 = self.hyper_b1(states)  # (1920, 32)
 
