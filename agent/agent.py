@@ -25,6 +25,9 @@ class Agents:
         elif args.alg == 'qmix':
             from policy.qmix import QMIX
             self.policy = QMIX(args)
+        elif args.alg == 'qplex':
+            from policy.qplex import QPLEX
+            self.policy = QPLEX(args)
         elif args.alg == 'coma':
             from policy.coma import COMA
             self.policy = COMA(args)
@@ -65,7 +68,11 @@ class Agents:
         # transform the shape of inputs from (42,) to (1,42)
         inputs = torch.tensor(inputs, dtype=torch.float32).unsqueeze(0)
         avail_actions = torch.tensor(avail_actions, dtype=torch.float32).unsqueeze(0)
-        if self.args.cuda:
+        device = getattr(self.policy, 'device', None)
+        if device is not None:
+            inputs = inputs.to(device)
+            hidden_state = hidden_state.to(device)
+        elif self.args.cuda:
             inputs = inputs.cuda()
             hidden_state = hidden_state.cuda()
 

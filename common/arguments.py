@@ -8,6 +8,24 @@ Here are the param for the training
 """
 
 
+def str2bool(value):
+    """Parse boolean values from command line strings."""
+    if isinstance(value, bool):
+        return value
+    value = value.lower()
+    if value in ('yes', 'true', 't', '1'):
+        return True
+    if value in ('no', 'false', 'f', '0'):
+        return False
+    raise argparse.ArgumentTypeError('Boolean value expected.')
+
+
+def _set_default(args, name, value):
+    """Set an argument default only when it was not parsed from the command line."""
+    if not hasattr(args, name):
+        setattr(args, name, value)
+
+
 def add_env_args(parser):
     """Add SMAC environment arguments to the parser."""
     parser.add_argument('--continuing_episode', type=bool, default=False, help='whether to continue after episode limit')
@@ -33,11 +51,61 @@ def add_env_args(parser):
     parser.add_argument('--replay_prefix', type=str, default='', help='prefix for saved replays')
     parser.add_argument('--state_last_action', type=bool, default=True, help='whether state includes last actions')
     parser.add_argument('--state_timestep_number', type=bool, default=False, help='whether state includes timestep number')
-    parser.add_argument('--seed', type=int, default=123, help='random seed')
     parser.add_argument('--step_mul', type=int, default=8, help='how many steps to make an action')
     parser.add_argument('--replay_dir', type=str, default='', help='absolute path to save the replay')
     parser.add_argument('--heuristic_ai', type=bool, default=False, help='whether to use heuristic AI')
     parser.add_argument('--debug', type=bool, default=False, help='whether to enable environment debug mode')
+    return parser
+
+
+def add_mixer_args(parser):
+    """Add command line arguments shared by value-decomposition algorithms."""
+    # network
+    parser.add_argument('--rnn_hidden_dim', type=int, default=64, help='hidden dimension of agent RNN')
+    parser.add_argument('--qmix_hidden_dim', type=int, default=32, help='hidden dimension of QMIX mixer')
+    parser.add_argument('--two_hyper_layers', type=str2bool, default=False, help='whether QMIX uses two hypernet layers')
+    parser.add_argument('--hyper_hidden_dim', type=int, default=64, help='hidden dimension of QMIX hypernet')
+    parser.add_argument('--qtran_hidden_dim', type=int, default=64, help='hidden dimension of QTRAN networks')
+    parser.add_argument('--lr', type=float, default=5e-4, help='learning rate for value-based policies')
+
+    # epsilon greedy
+    parser.add_argument('--epsilon', type=float, default=1, help='initial epsilon for epsilon-greedy')
+    parser.add_argument('--min_epsilon', type=float, default=0.05, help='minimum epsilon for epsilon-greedy')
+    parser.add_argument('--anneal_steps', type=int, default=50000, help='number of steps used to anneal epsilon')
+    parser.add_argument('--anneal_epsilon', type=float, default=None, help='epsilon decay per step; default is computed')
+    parser.add_argument('--epsilon_anneal_scale', type=str, default='step', help='epsilon anneal scale')
+
+    # training and replay
+    parser.add_argument('--train_steps', type=int, default=1, help='number of train steps per epoch')
+    parser.add_argument('--batch_size', type=int, default=32, help='batch size sampled from replay buffer')
+    parser.add_argument('--buffer_size', type=int, default=int(5e3), help='replay buffer size')
+    parser.add_argument('--save_cycle', type=int, default=5000, help='how often to save the model')
+    parser.add_argument('--target_update_cycle', type=int, default=200, help='how often to update target networks')
+    parser.add_argument('--grad_norm_clip', type=float, default=10, help='gradient clipping norm')
+
+    # QTRAN
+    parser.add_argument('--lambda_opt', type=float, default=1, help='QTRAN optimality loss coefficient')
+    parser.add_argument('--lambda_nopt', type=float, default=1, help='QTRAN non-optimality loss coefficient')
+
+    # MAVEN
+    parser.add_argument('--noise_dim', type=int, default=16, help='MAVEN noise dimension')
+    parser.add_argument('--lambda_mi', type=float, default=0.001, help='MAVEN mutual information coefficient')
+    parser.add_argument('--lambda_ql', type=float, default=1, help='MAVEN Q-learning loss coefficient')
+    parser.add_argument('--entropy_coefficient', type=float, default=0.001, help='MAVEN entropy coefficient')
+    return parser
+
+
+def add_qplex_args(parser):
+    """Add QPLEX-specific command line arguments."""
+    parser.add_argument('--mixing_embed_dim', type=int, default=32, help='QPLEX mixer embedding dimension')
+    parser.add_argument('--hypernet_embed', type=int, default=64, help='QPLEX transformation hypernet dimension')
+    parser.add_argument('--adv_hypernet_layers', type=int, default=2, help='number of QPLEX advantage hypernet layers')
+    parser.add_argument('--adv_hypernet_embed', type=int, default=32, help='QPLEX advantage hypernet dimension')
+    parser.add_argument('--num_kernel', type=int, default=4, help='number of QPLEX advantage weight kernels')
+    parser.add_argument('--is_minus_one', type=str2bool, default=True, help='whether to use lambda_i - 1 in advantage')
+    parser.add_argument('--is_stop_gradient', type=str2bool, default=False, help='whether to detach QPLEX advantage values')
+    parser.add_argument('--weighted_head', type=str2bool, default=True, help='whether to use QPLEX transformation network')
+    parser.add_argument('--double_q', type=str2bool, default=True, help='whether QPLEX uses double Q targets')
     return parser
 
 
@@ -49,7 +117,8 @@ def get_common_args():
     # The alternative algorithms are vdn, coma, central_v, qmix, qtran_base,
     # qtran_alt, reinforce, coma+commnet, central_v+commnet, reinforce+commnet，
     # coma+g2anet, central_v+g2anet, reinforce+g2anet, maven
-    parser.add_argument('--alg', type=str, default='qmix', help='the algorithm to train the agent')
+    parser.add_argument('--seed', type=int, default=123, help='random seed')
+    parser.add_argument('--alg', type=str, default='qplex', help='the algorithm to train the agent')
     parser.add_argument('--n_steps', type=int, default=1000000, help='total time steps')
     parser.add_argument('--n_episodes', type=int, default=1, help='the number of episodes before once training')
     parser.add_argument('--last_action', type=bool, default=True, help='whether to use the last action to choose action')
@@ -66,6 +135,13 @@ def get_common_args():
     parser.add_argument('--load_model', type=bool, default=False, help='whether to load the pretrained model')
     parser.add_argument('--evaluate', type=bool, default=False, help='whether to evaluate the model')
     parser.add_argument('--cuda', type=bool, default=True, help='whether to use the GPU')
+    parser.add_argument('--device', type=str, default=None, help='torch device, e.g. cpu, cuda:0, cuda:1')
+    known_args, _ = parser.parse_known_args()
+    mixer_algs = ['vdn', 'iql', 'qmix', 'qtran_base', 'qtran_alt', 'maven', 'qplex']
+    if known_args.alg in mixer_algs:
+        parser = add_mixer_args(parser)
+    if known_args.alg == 'qplex':
+        parser = add_qplex_args(parser)
     args = parser.parse_args()
     return args
 
@@ -74,6 +150,7 @@ def get_env_args(args):
     """Build keyword arguments for the SMAC environment."""
     return {
         'map_name': args.map,
+        'seed': args.seed,
         'step_mul': args.step_mul,
         'difficulty': args.difficulty,
         'game_version': args.game_version,
@@ -137,45 +214,56 @@ def get_coma_args(args):
 def get_mixer_args(args):
     """补充 IQL/VDN/QMIX/QTRAN/MAVEN 共用的值分解训练参数。"""
     # network
-    args.rnn_hidden_dim = 64
-    args.qmix_hidden_dim = 32
-    args.two_hyper_layers = False
-    args.hyper_hidden_dim = 64
-    args.qtran_hidden_dim = 64
-    args.lr = 5e-4
+    _set_default(args, 'rnn_hidden_dim', 64)
+    _set_default(args, 'qmix_hidden_dim', 32)
+    _set_default(args, 'two_hyper_layers', False)
+    _set_default(args, 'hyper_hidden_dim', 64)
+    _set_default(args, 'qtran_hidden_dim', 64)
+    _set_default(args, 'lr', 5e-4)
+    if args.alg == 'qplex':
+        _set_default(args, 'mixing_embed_dim', 32)
+        _set_default(args, 'hypernet_embed', 64)
+        _set_default(args, 'adv_hypernet_layers', 2)
+        _set_default(args, 'adv_hypernet_embed', 32)
+        _set_default(args, 'num_kernel', 4)
+        _set_default(args, 'is_minus_one', True)
+        _set_default(args, 'is_stop_gradient', False)
+        _set_default(args, 'weighted_head', True)
+        _set_default(args, 'double_q', True)
 
     # epsilon greedy
-    args.epsilon = 1
-    args.min_epsilon = 0.05
-    anneal_steps = 50000
-    args.anneal_epsilon = (args.epsilon - args.min_epsilon) / anneal_steps
-    args.epsilon_anneal_scale = 'step'
+    _set_default(args, 'epsilon', 1)
+    _set_default(args, 'min_epsilon', 0.05)
+    _set_default(args, 'anneal_steps', 50000)
+    if not hasattr(args, 'anneal_epsilon') or args.anneal_epsilon is None:
+        args.anneal_epsilon = (args.epsilon - args.min_epsilon) / args.anneal_steps
+    _set_default(args, 'epsilon_anneal_scale', 'step')
 
     # the number of the train steps in one epoch
-    args.train_steps = 1
+    _set_default(args, 'train_steps', 1)
 
     # experience replay
-    args.batch_size = 32
-    args.buffer_size = int(5e3)
+    _set_default(args, 'batch_size', 32)
+    _set_default(args, 'buffer_size', int(5e3))
 
     # how often to save the model
-    args.save_cycle = 5000
+    _set_default(args, 'save_cycle', 5000)
 
     # how often to update the target_net
-    args.target_update_cycle = 200
+    _set_default(args, 'target_update_cycle', 200)
 
     # QTRAN lambda
-    args.lambda_opt = 1
-    args.lambda_nopt = 1
+    _set_default(args, 'lambda_opt', 1)
+    _set_default(args, 'lambda_nopt', 1)
 
     # prevent gradient explosion
-    args.grad_norm_clip = 10
+    _set_default(args, 'grad_norm_clip', 10)
 
     # MAVEN
-    args.noise_dim = 16
-    args.lambda_mi = 0.001
-    args.lambda_ql = 1
-    args.entropy_coefficient = 0.001
+    _set_default(args, 'noise_dim', 16)
+    _set_default(args, 'lambda_mi', 0.001)
+    _set_default(args, 'lambda_ql', 1)
+    _set_default(args, 'entropy_coefficient', 0.001)
     return args
 
 

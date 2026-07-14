@@ -1,8 +1,24 @@
 """项目入口：解析参数、创建 SMAC 环境并启动多次训练或评估。"""
 
+import random
+
+import numpy as np
+import torch
+
 from runner import Runner
 from smac.env import StarCraft2Env
 from common.arguments import get_common_args, get_env_args, get_coma_args, get_mixer_args, get_centralv_args, get_reinforce_args, get_commnet_args, get_g2anet_args
+
+
+def set_random_seed(seed):
+    """Set random seeds used by Python, NumPy and PyTorch."""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
 
 if __name__ == '__main__':
@@ -22,6 +38,8 @@ if __name__ == '__main__':
         if args.alg.find('g2anet') > -1:
             args = get_g2anet_args(args)
         args.run_num = i
+        args.seed += i
+        set_random_seed(args.seed)
         env = StarCraft2Env(**get_env_args(args))
         # 环境相关维度必须在创建算法网络之前写回 args。
         env_info = env.get_env_info()
