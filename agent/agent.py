@@ -139,11 +139,12 @@ class Agents:
         for key in batch.keys():
             if key != 'z':
                 batch[key] = batch[key][:, :max_episode_len]
-        self.policy.learn(batch, max_episode_len, train_step, epsilon)
+        loss = self.policy.learn(batch, max_episode_len, train_step, epsilon)
         if train_step > 0 and train_step % self.args.save_cycle == 0:
             elapsed_time = time.time() - getattr(self.args, 'training_start_time', time.time())
             print('Save model at train_step {}, elapsed time {}'.format(train_step, format_elapsed_time(elapsed_time)))
             self.policy.save_model(train_step)
+        return loss
 
 
 # Agent for communication
@@ -230,11 +231,12 @@ class CommAgents:
         max_episode_len = self._get_max_episode_len(batch)
         for key in batch.keys():
             batch[key] = batch[key][:, :max_episode_len]
-        self.policy.learn(batch, max_episode_len, train_step, epsilon)
+        loss = self.policy.learn(batch, max_episode_len, train_step, epsilon)
         if train_step > 0 and train_step % self.args.save_cycle == 0:
             elapsed_time = time.time() - getattr(self.args, 'training_start_time', time.time())
             print('Save model at train_step {}, elapsed time {}'.format(train_step, format_elapsed_time(elapsed_time)))
             self.policy.save_model(train_step)
+        return loss
 
 
 

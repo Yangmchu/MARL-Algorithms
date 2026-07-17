@@ -145,6 +145,7 @@ class QPLEX:
         if train_step > 0 and train_step % self.args.target_update_cycle == 0:
             self.target_rnn.load_state_dict(self.eval_rnn.state_dict())
             self.target_qplex_net.load_state_dict(self.eval_qplex_net.state_dict())
+        return loss.item()
 
     def _get_sequence_inputs(self, batch, transition_idx, max_episode_len):
         if transition_idx < max_episode_len:
@@ -190,7 +191,7 @@ class QPLEX:
         self.target_hidden = torch.zeros((episode_num, self.n_agents, self.args.rnn_hidden_dim), device=self.device)
 
     def save_model(self, train_step):
-        num = 'final' if train_step == 'final' else str(train_step // self.args.save_cycle)
+        num = train_step if isinstance(train_step, str) else str(train_step // self.args.save_cycle)
         if not os.path.exists(self.model_dir):
             os.makedirs(self.model_dir)
         torch.save(self.eval_qplex_net.state_dict(), self.model_dir + '/' + num + '_qplex_net_params.pkl')

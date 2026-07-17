@@ -123,6 +123,7 @@ class COMA:
         # print('Training: actor params')
         # for params in self.eval_rnn.named_parameters():
         #     print(params)
+        return loss.item()
 
     def _get_critic_inputs(self, batch, transition_idx, max_episode_len):
         # 取出所有episode上该transition_idx的经验

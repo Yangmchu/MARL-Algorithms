@@ -76,7 +76,6 @@ def add_mixer_args(parser):
     parser.add_argument('--epsilon_anneal_scale', type=str, default='step', help='epsilon anneal scale')
 
     # training and replay
-    parser.add_argument('--train_steps', type=int, default=1, help='number of train steps per epoch')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size sampled from replay buffer')
     parser.add_argument('--buffer_size', type=int, default=int(5e3), help='replay buffer size')
     parser.add_argument('--save_cycle', type=int, default=5000, help='how often to save the model')
@@ -119,8 +118,11 @@ def get_common_args():
     # coma+g2anet, central_v+g2anet, reinforce+g2anet, maven
     parser.add_argument('--seed', type=int, default=123, help='random seed')
     parser.add_argument('--alg', type=str, default='qplex', help='the algorithm to train the agent')
-    parser.add_argument('--n_steps', type=int, default=1000000, help='total time steps')
+    parser.add_argument('--n_steps', type=int, default=10_000_000, help='total time steps')
     parser.add_argument('--n_episodes', type=int, default=1, help='the number of episodes before once training')
+    parser.add_argument('--train_steps', type=int, default=1, help='number of train steps after each collection batch')
+    parser.add_argument('--use_parallel', type=str2bool, default=False, help='whether to collect training episodes in parallel')
+    parser.add_argument('--num_cpu', type=int, default=4, help='number of rollout worker processes used when use_parallel is true')
     parser.add_argument('--last_action', type=bool, default=True, help='whether to use the last action to choose action')
     parser.add_argument('--reuse_network', type=bool, default=True, help='whether to use one network for all agents')
     parser.add_argument('--gamma', type=float, default=0.99, help='discount factor')
@@ -133,6 +135,7 @@ def get_common_args():
     parser.add_argument('--load_run', type=int, default=None, help='run id used when loading models; default loads the latest run')
     parser.add_argument('--load_checkpoint', type=int, default=None, help='checkpoint id used when loading models; default loads the latest checkpoint')
     parser.add_argument('--load_model', type=bool, default=False, help='whether to load the pretrained model')
+    parser.add_argument('--append_results', type=str2bool, default=False, help='whether to append saved result curves when resuming')
     parser.add_argument('--evaluate', type=bool, default=False, help='whether to evaluate the model')
     parser.add_argument('--cuda', type=bool, default=True, help='whether to use the GPU')
     parser.add_argument('--device', type=str, default=None, help='torch device, e.g. cpu, cuda:0, cuda:1')

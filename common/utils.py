@@ -30,9 +30,55 @@ def get_save_dir(root_dir, args):
     return root_dir + '/' + args.alg + '/' + args.map + '/' + get_run_tag(args) + '/' + get_run_name(args)
 
 
+def _get_run_base_dir(root_dir, args):
+    return root_dir + '/' + args.alg + '/' + args.map + '/' + get_run_tag(args)
+
+
+def _list_run_nums(base_dir):
+    run_nums = []
+    if not os.path.exists(base_dir):
+        return run_nums
+    for name in os.listdir(base_dir):
+        path = base_dir + '/' + name
+        if os.path.isdir(path) and name.startswith('run_'):
+            try:
+                run_nums.append(int(name.split('_')[-1]))
+            except ValueError:
+                pass
+    return run_nums
+
+
+def reserve_next_run(args):
+    """Reserve the next run id atomically so concurrent jobs do not overwrite."""
+    if getattr(args, 'save_run', None) is not None:
+        args.run_num = args.save_run
+        return args.run_num
+
+    result_base_dir = _get_run_base_dir(args.result_dir, args)
+    model_base_dir = _get_run_base_dir(args.model_dir, args)
+    os.makedirs(result_base_dir, exist_ok=True)
+    os.makedirs(model_base_dir, exist_ok=True)
+
+    while True:
+        used_run_nums = _list_run_nums(result_base_dir) + _list_run_nums(model_base_dir)
+        next_run = max(used_run_nums) + 1 if used_run_nums else 0
+        result_run_dir = result_base_dir + '/run_{}'.format(next_run)
+        model_run_dir = model_base_dir + '/run_{}'.format(next_run)
+        try:
+            os.mkdir(result_run_dir)
+        except FileExistsError:
+            continue
+        try:
+            os.mkdir(model_run_dir)
+        except FileExistsError:
+            continue
+        args.run_num = next_run
+        return next_run
+
+
 def get_load_dir(root_dir, args):
     """返回模型加载目录；未指定 load_run 时自动选择最新的 run_x。"""
-    base_dir = root_dir + '/' + args.alg + '/' + args.map + '/' + get_run_tag(args)
+    base_dir = _get_run_base_dir(root_dir, args)
     load_run = getattr(args, 'load_run', None)
     if load_run is not None:
         return base_dir + '/run_{}'.format(load_run)

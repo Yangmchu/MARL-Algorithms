@@ -94,6 +94,7 @@ class Reinforce:
             torch.nn.utils.clip_grad_norm_(self.rnn_parameters, self.args.grad_norm_clip)
         self.rnn_optimizer.step()
         # print('Actor loss is', loss)
+        return loss.item()
 
     def _get_returns(self, r, mask, terminated, max_episode_len):
         r = r.squeeze(-1)
